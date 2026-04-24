@@ -6,7 +6,7 @@ from exp.exp_imputation import Exp_Imputation
 from exp.exp_short_term_forecasting import Exp_Short_Term_Forecast
 from exp.exp_anomaly_detection import Exp_Anomaly_Detection
 from exp.exp_classification import Exp_Classification
-from exp.exp_super_resolution import Exp_Super_Resolution
+#from exp.exp_super_resolution import Exp_Super_Resolution
 from utils.print_args import print_args
 import random
 import numpy as np
@@ -85,7 +85,7 @@ if __name__ == '__main__':
     parser.add_argument('--channel_independence', type=int, default=1,
                         help='1: channel dependence 0: channel independence for FreTS model')
     # optimization
-    parser.add_argument('--num_workers', type=int, default=10, help='data loader num workers')
+    parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
     parser.add_argument('--itr', type=int, default=1, help='experiments times')
     parser.add_argument('--train_epochs', type=int, default=10, help='train epochs')
     parser.add_argument('--batch_size', type=int, default=64, help='batch size of train input data')
@@ -130,8 +130,8 @@ if __name__ == '__main__':
         Exp = Exp_Anomaly_Detection
     elif args.task_name == 'classification':
         Exp = Exp_Classification
-    elif args.task_name == 'super_resolution':
-        Exp = Exp_Super_Resolution
+    # elif args.task_name == 'super_resolution':
+    #     Exp = Exp_Super_Resolution
     else:
         Exp = Exp_Long_Term_Forecast
 

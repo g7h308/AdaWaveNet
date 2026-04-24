@@ -1,6 +1,6 @@
 export CUDA_VISIBLE_DEVICES=0
 
-model_name=LSWaveNet
+model_name=AdaWaveNet
 
 python -u run.py \
   --task_name long_term_forecast \
