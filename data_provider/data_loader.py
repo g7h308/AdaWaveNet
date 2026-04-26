@@ -14,6 +14,75 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
+import random
+
+
+# ================= 新增：VFT 分类数据集加载器 =================
+class Dataset_VFT(Dataset):
+    def __init__(self, root_path, flag='train', size=None,
+                 features='S', data_path='VFT',
+                 target='OT', scale=True, timeenc=0, freq='h', season='all'):
+
+        self.root_path = root_path
+        # 你的两个类别文件夹
+        self.classes = ['HC_xlsx', 'ADHD_xlsx']
+        self.class_map = {c: i for i, c in enumerate(self.classes)}
+
+        # 搜集所有文件路径及其对应的标签
+        all_files = []
+        for c in self.classes:
+            folder = os.path.join(self.root_path, c)
+            if not os.path.exists(folder):
+                continue
+            for file in os.listdir(folder):
+                if file.endswith('.xlsx'):
+                    all_files.append((os.path.join(folder, file), self.class_map[c]))
+
+        # 为了保证每次运行划分一致，先排序再设置固定随机种子打乱
+        all_files.sort()
+        random.seed(42)
+        random.shuffle(all_files)
+
+        # 按照 7: 1.5: 1.5 划分 训练/验证/测试集
+        total_len = len(all_files)
+        train_len = int(total_len * 0.7)
+        val_len = int(total_len * 0.15)
+
+        if flag == 'train':
+            self.files = all_files[:train_len]
+        elif flag == 'val':
+            self.files = all_files[train_len:train_len + val_len]
+        elif flag == 'test':
+            self.files = all_files[train_len + val_len:]
+
+        # 满足 exp_classification.py 中要求的属性
+        self.max_seq_len = 1601
+        self.class_names = self.classes
+        # 构建一个 dummy df 来提供 enc_in (特征数 22) 的维度信息给框架
+        self.feature_df = pd.DataFrame(np.zeros((1, 22)))
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, idx):
+        filepath, label = self.files[idx]
+
+        # 读取第一个 sheet。如果你的第一行纯粹是数据而不是列名，请加上 header=None
+        df = pd.read_excel(filepath, sheet_name=0, header=None)
+
+
+        data = df.values  # 转换为 numpy array，理论上 shape 为 (1601, 22)
+
+        # 如果有些序列长度不足，TSLib 分类任务通常需要 padding_mask
+        # 既然你全是 1601，我们直接全部设为 1 (有效)
+        seq_len = data.shape[0]
+        padding_mask = np.ones(seq_len)
+
+        # 转换为 float 类型，满足 PyTorch 需求
+        return data.astype(np.float32), label, padding_mask
+
+
+# =========================================================
 
 class Dataset_ETT_hour(Dataset):
     def __init__(self, root_path, flag='train', size=None,

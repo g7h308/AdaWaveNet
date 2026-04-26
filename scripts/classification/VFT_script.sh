@@ -1,0 +1,13 @@
+python run.py \
+  --task_name classification \
+  --is_training 1 \
+  --root_path ../../Dual_Gate_Model/data/VFT \
+  --model_id VFT_Classification \
+  --model AdaWaveNet \
+  --data VFT \
+  --features M \
+  --seq_len 1601 \
+  --enc_in 22 \
+  --num_class 2 \
+  --batch_size 16 \
+  --learning_rate 0.001

@@ -190,7 +190,16 @@ class Model(nn.Module):
         self.coef_dec_levels = nn.ModuleList()
         in_planes = configs.enc_in
         input_size = self.seq_len
-        
+
+        # ================= 新增: 分类头 (Classification Head) =================
+        if self.task_name == 'classification':
+            self.act = F.gelu
+            self.dropout = nn.Dropout(configs.dropout)
+            # 因为 AdaWaveNet 通常使用倒置嵌入(Inverted Embedding, 类似 iTransformer)
+            # 经过 Encoder 后的形状通常是 [Batch, Channels, d_model]
+            # 展平后维度为 configs.enc_in * configs.d_model
+            self.projection = nn.Linear(configs.enc_in * configs.d_model, configs.num_class)
+
         if self.task_name == "super_resolution":
             expand_ratio = configs.sr_ratio
         else:
@@ -271,6 +280,32 @@ class Model(nn.Module):
             self.projection = nn.Linear(configs.pred_len, configs.pred_len, bias=True)
 
         self.register_buffer('clusters', None)
+
+    # ---------------------------------------------------------
+    # 新增：定义分类任务的特征提取和输出逻辑
+    # ---------------------------------------------------------
+    def classification(self, x_enc, padding_mask):
+        # x_enc shape: [B, L, C]
+        # padding_mask shape: [B, L]
+
+        # 1. 经过 Embedding 层
+        # 这里的提取逻辑请参考你代码中 forecast() 方法的前几行
+        # 如果是类似 iTransformer 的倒置嵌入，这里 x_enc 会变成 [B, C, d_model]
+        enc_out, _ = self.enc_embedding(x_enc, None)  # 具体的参数视你原来的代码而定
+
+        # 2. 经过 AdaWaveNet 核心编码器
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+
+        # 3. 形状转换与展平处理
+        # 假设此时 enc_out 是 [Batch, Channel, d_model]
+        # (如果输出是 [Batch, Seq_len, d_model]，那就乘以 seq_len)
+        output = enc_out.reshape(enc_out.shape[0], -1)
+
+        # 4. 经过 Dropout 和分类映射
+        output = self.dropout(output)
+        output = self.projection(output)  # shape: [Batch, num_class]
+
+        return output
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, clusters):
         x, moving_mean = self.series_decomp(x_enc.permute(0,2,1))
@@ -520,4 +555,9 @@ class Model(nn.Module):
         if self.task_name == 'super_resolution':
             dec_out = self.super_resolution(x_enc)
             return dec_out
+
+        if self.task_name == 'classification':
+            # 在 exp_classification 中，x_mark_enc 的位置传入的是 padding_mask
+            dec_out = self.classification(x_enc, padding_mask=x_mark_enc)
+            return dec_out  # shape: [Batch, num_class]
         return None
