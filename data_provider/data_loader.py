@@ -45,15 +45,13 @@ class Dataset_VFT(Dataset):
 
         # 按照 7: 1.5: 1.5 划分 训练/验证/测试集
         total_len = len(all_files)
-        train_len = int(total_len * 0.7)
-        val_len = int(total_len * 0.15)
+        train_len = int(total_len * 0.8)
         flag = flag.lower()
         if flag == 'train':
             self.files = all_files[:train_len]
-        elif flag == 'val':
-            self.files = all_files[train_len:train_len + val_len]
-        elif flag == 'test':
-            self.files = all_files[train_len + val_len:]
+        # 如果框架万一请求了 'val'，我们也给它返回这 20% 的测试集数据
+        elif flag == 'val' or flag == 'test':
+            self.files = all_files[train_len:]
 
         # 满足 exp_classification.py 中要求的属性
         self.max_seq_len = 1601

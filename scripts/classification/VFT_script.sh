@@ -10,4 +10,5 @@ python run.py \
   --enc_in 22 \
   --num_class 2 \
   --batch_size 16 \
-  --learning_rate 0.001
+  --learning_rate 0.001 \
+  --patience 10
