@@ -47,7 +47,7 @@ class Dataset_VFT(Dataset):
         total_len = len(all_files)
         train_len = int(total_len * 0.7)
         val_len = int(total_len * 0.15)
-
+        flag = flag.lower()
         if flag == 'train':
             self.files = all_files[:train_len]
         elif flag == 'val':
@@ -67,19 +67,18 @@ class Dataset_VFT(Dataset):
     def __getitem__(self, idx):
         filepath, label = self.files[idx]
 
-        # 读取第一个 sheet。如果你的第一行纯粹是数据而不是列名，请加上 header=None
+        # 读取文件
         df = pd.read_excel(filepath, sheet_name=0, header=None)
+        data = df.values
 
+        # 数据转为 Tensor
+        data_tensor = torch.tensor(data, dtype=torch.float32)
 
-        data = df.values  # 转换为 numpy array，理论上 shape 为 (1601, 22)
+        # 【修改这里】：将整数 label 也转换为 PyTorch Tensor
+        label_tensor = torch.tensor(label, dtype=torch.long)
 
-        # 如果有些序列长度不足，TSLib 分类任务通常需要 padding_mask
-        # 既然你全是 1601，我们直接全部设为 1 (有效)
-        seq_len = data.shape[0]
-        padding_mask = np.ones(seq_len)
-
-        # 转换为 float 类型，满足 PyTorch 需求
-        return data.astype(np.float32), label, padding_mask
+        # 返回两个 Tensor
+        return data_tensor, label_tensor
 
 
 # =========================================================

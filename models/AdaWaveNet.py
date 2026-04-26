@@ -281,31 +281,50 @@ class Model(nn.Module):
 
         self.register_buffer('clusters', None)
 
+
     # ---------------------------------------------------------
-    # 新增：定义分类任务的特征提取和输出逻辑
+    # 修复：完整对齐 AdaWaveNet 核心流程的分类前向传播
     # ---------------------------------------------------------
     def classification(self, x_enc, padding_mask):
-        # x_enc shape: [B, L, C]
-        # padding_mask shape: [B, L]
+        # x_enc shape:[B, L, C] (例如: [16, 1601, 22])
 
-        # 1. 经过 Embedding 层
-        # 这里的提取逻辑请参考你代码中 forecast() 方法的前几行
-        # 如果是类似 iTransformer 的倒置嵌入，这里 x_enc 会变成 [B, C, d_model]
-        enc_out, _ = self.enc_embedding(x_enc, None)  # 具体的参数视你原来的代码而定
+        # 0. 【关键修复1】解决奇数长度报错：确保序列长度能被小波层数整除
+        # 如果原始 seq_len 是 1601, 一层小波变换后有效长度应为 1600
+        levels = len(self.encoder_levels)
+        valid_len = self.seq_len // (2 ** levels) * (2 ** levels)
+        x_enc = x_enc[:, -valid_len:, :]  # 截取有效的偶数长度 [B, 1600, C]
 
-        # 2. 经过 AdaWaveNet 核心编码器
+        # 1. 序列分解与归一化 (与 AdaWaveNet 的 forecast 保持一致，提升稳定性)
+        x, _ = self.series_decomp(x_enc.permute(0, 2, 1))
+        x_enc = x.permute(0, 2, 1)
+        means = x_enc.mean(1, keepdim=True).detach()
+        x_enc = x_enc - means
+        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x_enc /= stdev
+
+        # 2. 【关键修复2】AdaWaveNet 核心小波编码 (将长度减半，例如 1600 -> 800)
+        x_enc = x_enc.permute(0, 2, 1)  # 转为 [B, C, L] 满足卷积要求
+        for l in self.encoder_levels:
+            x_enc, r, details = l(x_enc)  # x_enc 的长度在这里被压缩一半
+
+        # 3. 经过倒置 Embedding 层 (提取通道特征，长度 800 -> 映射为 d_model=512)
+        x_enc = x_enc.permute(0, 2, 1)  # 转回 [B, L', C] 给 embedding
+        enc_out = self.enc_embedding(x_enc, None)  # 输出[B, C, d_model]
+
+        # 4. 经过 Transformer 编码器 (学习通道间的关联)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        # 3. 形状转换与展平处理
-        # 假设此时 enc_out 是 [Batch, Channel, d_model]
-        # (如果输出是 [Batch, Seq_len, d_model]，那就乘以 seq_len)
-        output = enc_out.reshape(enc_out.shape[0], -1)
+        # 5. 形状转换与展平处理
+        # 此时 enc_out 形状为 [Batch, Channel, d_model]
+        output = enc_out.reshape(enc_out.shape[0], -1)  # 展平为 [Batch, Channel * d_model]
 
-        # 4. 经过 Dropout 和分类映射
+        # 6. 经过 Dropout 和分类映射
         output = self.dropout(output)
         output = self.projection(output)  # shape: [Batch, num_class]
 
         return output
+
+
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, clusters):
         x, moving_mean = self.series_decomp(x_enc.permute(0,2,1))

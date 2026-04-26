@@ -106,6 +106,7 @@ if __name__ == '__main__':
     parser.add_argument('--p_hidden_dims', type=int, nargs='+', default=[128, 128],
                         help='hidden layer dimensions of projector (List)')
     parser.add_argument('--p_hidden_layers', type=int, default=2, help='number of hidden layers in projector')
+    parser.add_argument('--num_class', type=int, default=2, help='number of classes for classification')
 
 
     args = parser.parse_args()
